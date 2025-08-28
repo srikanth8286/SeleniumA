@@ -5,7 +5,15 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 import openpyxl
 import time
-from Framework.actions import click_element as click
+from Framework.actions import (
+    click_element as click,
+    input_text,
+    select_radio,
+    select_dropdown_by_text,
+    upload_file,
+    pick_date,
+    get_table_data
+)
 from Framework.elementConstruct import construct_element
 
 # ---------- Load Excel ----------
@@ -28,73 +36,60 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
 
     # --- Name ---
     name_field = wait.until(EC.visibility_of_element_located((By.ID, "name")))
-    name_field.clear()
-    name_field.send_keys(name or "")
-    print(f"Entered Name: {name}")
+    input_text(name_field, name or "")
     time.sleep(THINKTIME)
     # --- Email ---
     email_field = driver.find_element(By.ID, "email")
-    email_field.clear()
-    email_field.send_keys(email or "")
-    print(f"Entered Email: {email}")
+    input_text(email_field, email or "")
     time.sleep(THINKTIME)
     # --- Phone ---
     phone_field = driver.find_element(By.ID, "phone")
-    phone_field.clear()
-    phone_field.send_keys(str(phone or ""))
-    print(f"Entered Phone: {phone}")
+    input_text(phone_field, str(phone or ""))
     time.sleep(THINKTIME)
     # --- Address / Comments ---
     address_field = driver.find_element(By.ID, "textarea")
-    address_field.clear()
-    address_field.send_keys(address or "")
-    print(f"Entered Address: {address}")
+    input_text(address_field, address or "")
     time.sleep(THINKTIME)
     # --- Gender ---
     if gender:
         gender_id = "male" if gender.lower().startswith("m") else "female"
-        driver.find_element(By.ID, gender_id).click()
-        print(f"Selected Gender: {gender}")
-    print(f"days")
+        gender_radio = driver.find_element(By.ID, gender_id)
+        select_radio(gender_radio)
     # --- Days checkboxes ---
     if days:
         for day in days.split(","):
             day = day.strip()
             try:
                 checkbox = driver.find_element(By.XPATH, f"//input[@name='day' and contains(@value,'{day}')]")
-                checkbox.click()
+                select_radio(checkbox)
                 print(f"Checked Day: {day}")
             except:
                 print(f"Checkbox for {day} not found")
 
     # --- Country dropdown ---
     if country:
-        country_select = Select(driver.find_element(By.ID, "country"))
-        country_select.select_by_visible_text(country)
-        print(f"Selected Country: {country}")
+        country_select = driver.find_element(By.ID, "country")
+        select_dropdown_by_text(country_select, country)
     time.sleep(THINKTIME)
     # --- Colors dropdown ---
     if color:
-        color_select = Select(driver.find_element(By.ID, "colors"))
-        color_select.select_by_visible_text(color)
-        print(f"Selected Color: {color}")
+        color_select = driver.find_element(By.ID, "colors")
+        select_dropdown_by_text(color_select, color)
     time.sleep(THINKTIME)
     # --- Date picker ---
     if date1:
         date_str = date1.strftime("%m/%d/%Y") if hasattr(date1, 'strftime') else str(date1)
-        driver.find_element(By.ID, "datepicker").clear()
-        driver.find_element(By.ID, "datepicker").send_keys(date_str)
-        print(f"Entered Date: {date_str}")
+        date_field = driver.find_element(By.ID, "datepicker")
+        pick_date(date_field, date_str)
     time.sleep(THINKTIME)
     # --- File Upload ---
     if upload_file:
-        driver.find_element(By.ID, "filename").send_keys(upload_file)
-        print(f"Uploaded File: {upload_file}")
+        file_input = driver.find_element(By.ID, "filename")
+        upload_file(file_input, upload_file)
     time.sleep(THINKTIME)
     # --- Submit ---
     submit = construct_element(driver, By.XPATH, "//input[@value='Submit']")
     click(driver, submit)
-    # driver.find_element(By.XPATH, "//input[@value='Submit']").click()
     print("Clicked Submit button")
     time.sleep(3)
     time.sleep(THINKTIME)
@@ -102,11 +97,9 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     print("\nStatic Table:")
     try:
         static_table = driver.find_element(By.XPATH, "//table[@border='1']")
-        rows = static_table.find_elements(By.TAG_NAME, "tr")
-        for r in rows[1:]:
-            cols = r.find_elements(By.TAG_NAME, "td")
-            data = [c.text for c in cols]
-            print(data)
+        static_data = get_table_data(static_table)
+        for row in static_data[1:]:
+            print(row)
     except:
         print("Static table not found")
     time.sleep(THINKTIME)
@@ -114,11 +107,9 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     print("\nDynamic Table:")
     try:
         dynamic_table = driver.find_element(By.XPATH, "//table[@border='1' and .//th[text()='Name']]")
-        rows = dynamic_table.find_elements(By.TAG_NAME, "tr")
-        for r in rows[1:]:
-            cols = r.find_elements(By.TAG_NAME, "td")
-            data = [c.text for c in cols]
-            print(data)
+        dynamic_data = get_table_data(dynamic_table)
+        for row in dynamic_data[1:]:
+            print(row)
     except:
         print("Dynamic table not found")
 
