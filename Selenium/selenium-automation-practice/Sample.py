@@ -119,10 +119,37 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     time.sleep(THINKTIME)
     # --- Date picker 1 (mm/dd/yyyy) ---
     if date1:
-        date_str = date1.strftime("%m/%d/%Y") if hasattr(date1, 'strftime') else str(date1)
-        date_field = driver.find_element(By.ID, "datepicker")
-        pick_date(date_field, date_str)
-        print(f"Date Picker 1 set to: {date_str}")
+        try:
+            date_str = date1.strftime("%m/%d/%Y") if hasattr(date1, 'strftime') else str(date1)
+            date_field = driver.find_element(By.ID, "datepicker")
+            
+            # Click on the date picker to open the calendar
+            date_field.click()
+            time.sleep(1)
+            print("Date Picker 1 opened")
+            
+            # Clear and enter the date
+            date_field.clear()
+            date_field.send_keys(date_str)
+            time.sleep(1)
+            
+            # Press Tab or click outside to close the date picker
+            from selenium.webdriver.common.keys import Keys
+            date_field.send_keys(Keys.TAB)
+            time.sleep(1)
+            
+            # Alternative: Click somewhere else to close the picker
+            try:
+                # Click on a neutral area to close the date picker
+                driver.find_element(By.TAG_NAME, "body").click()
+                time.sleep(1)
+            except:
+                pass
+            
+            print(f"Date Picker 1 set to: {date_str} and closed")
+            
+        except Exception as e:
+            print(f"Error with Date Picker 1: {e}")
     time.sleep(THINKTIME)
     
     # --- Date picker 2 (dd/mm/yyyy) ---
