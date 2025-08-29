@@ -76,7 +76,7 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
                 print(f"xPath: {xPath}")
                 checkbox = driver.find_element(By.XPATH, xPath)
                 checkbox.click()
-                time.sleep(THINKTIME + 10)
+                time.sleep(THINKTIME + 1)
                 print(f"Checked Day: {day}")
                 #get checkbox selected or not
                 is_selected = checkbox.is_selected()
@@ -195,11 +195,11 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
         date_range_section = None
         try:
             # Try to find the Date Picker 3 label
-            date_range_section = driver.find_element(By.XPATH, "//text()[contains(., 'Date Picker 3')]/parent::*")
+            date_range_section = driver.find_element(By.id,"start-date")
         except:
             try:
                 # Alternative: look for date range related text
-                date_range_section = driver.find_element(By.XPATH, "//*[contains(text(), 'Date Range') or contains(text(), 'Select a Date Range')]")
+                date_range_section = driver.find_element(By.id,"start-date")
             except:
                 print("Date Picker 3 section not found")
         
@@ -349,8 +349,8 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     print("Clicked Submit button")
     
     # Take screenshot after submission
-    screenshot_path = os.path.join(os.path.dirname(__file__), f"screenshot_{name or 'test'}.png")
-    take_screenshot(driver, screenshot_path)
+    #screenshot_path = os.path.join(os.path.dirname(__file__), f"screenshot_{name or 'test'}.png")
+    #take_screenshot(driver, screenshot_path)
     
     # Check for any success/error messages
     try:
@@ -413,15 +413,28 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
         driver.switch_to.default_content()  # Ensure we're back to main content
     time.sleep(THINKTIME)
     # --- Read Static Table ---
-    print("\nStatic Table:")
+    print("\nStatic Web Table:")
     try:
-        static_table = driver.find_element(By.XPATH, "//table[@border='1']")
+        # Find the static table with books data
+        static_table = driver.find_element(By.NAME, "BookTable")
         static_data = get_table_data(static_table)
-        print("Static Table Data:")
-        for i, row in enumerate(static_data):
-            print(f"Row {i}: {row}")
-    except:
-        print("Static table not found")
+        
+        print("=== TOP 3 ROWS FROM STATIC TABLE ===")
+        
+        # Print header row first
+        if len(static_data) > 0:
+            print(f"Header: {static_data[0]}")
+            print("-" * 60)
+        
+        # Print top 3 data rows (excluding header)
+        for i in range(1, min(4, len(static_data))):
+            row = static_data[i]
+            print(f"Row {i}: BookName='{row[0]}', Author='{row[1]}', Subject='{row[2]}', Price='{row[3]}'")
+        
+        print(f"\nTotal rows in static table: {len(static_data)} (including header)")
+        
+    except Exception as e:
+        print(f"Static table error: {e}")
     time.sleep(THINKTIME)
     
     # --- Read Dynamic Table ---
