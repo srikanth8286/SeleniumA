@@ -123,7 +123,7 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     if date2:
         try:
             date_str2 = date2.strftime("%m/%d/%Y") if hasattr(date2, 'strftime') else str(date2)
-            date_field2 = driver.find_element(By.ID, "txtDate")
+            date_field2 = driver.find_element(By.ID, "txtDate.hasDatepicker")
             
             # Use the reusable function for date picker interaction
             interact_with_date_picker(driver, date_field2, date_str2)
@@ -311,10 +311,10 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     except:
         print("Wikipedia search not available or failed")
     
-    # Try to interact with double click button (if available)
+    # Try to interact with double click button 
     try:
-        double_click_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Copy Text')]")
-        double_click_btn.double_click()
+        double_click_btn = driver.find_element(By.XPATH, "//*[@id='HTML10']/div[1]/button")
+        ActionChains(driver).double_click(double_click_btn).perform()
         print("Double click performed")
     except:
         print("Double click button not found")
@@ -329,19 +329,7 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     except:
         print("Drag and drop elements not found")
     
-    # Check for iframes and interact if present
-    try:
-        iframe = driver.find_element(By.TAG_NAME, "iframe")
-        driver.switch_to.frame(iframe)
-        # Try to find and interact with elements inside iframe
-        iframe_input = driver.find_element(By.TAG_NAME, "input")
-        input_text(iframe_input, "Test in iframe")
-        driver.switch_to.default_content()
-        print("Iframe interaction completed")
-    except:
-        print("No iframe found or interaction failed")
-        driver.switch_to.default_content()  # Ensure we're back to main content
-    time.sleep(THINKTIME)
+    
     # --- Read Static Table ---
     print("\nStatic Web Table:")
     try:
@@ -412,8 +400,8 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
             else:
                 # Method 3: Use XPath to get elements after the table
                 try:
-                    text_elements = driver.find_elements(By.XPATH, 
-                        "//table[@id='taskTable']/following::div[contains(text(), 'CPU') or contains(text(), 'Memory') or contains(text(), 'Network') or contains(text(), 'Disk')]")
+                    text_elements = driver.find_elements(By.XPATH, "//*[@id='displayValues']")
+                     #   "//table[@id='taskTable']/following::div[contains(text(), 'CPU') or contains(text(), 'Memory') or contains(text(), 'Network') or contains(text(), 'Disk')]")
                     for elem in text_elements:
                         print(elem.text)
                 except Exception as e2:
