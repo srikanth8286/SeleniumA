@@ -15,11 +15,19 @@ from Framework.actions import (
     select_radio,
     select_dropdown_by_text,
     upload_file,
+    upload_file_with_submit,
     pick_date,
     get_table_data,
     take_screenshot,
     validate_text,
-    scroll_to_element
+    scroll_to_element,
+    interact_with_date_picker,
+    set_date_range,
+    find_element_by_multiple_selectors,
+    find_element_with_text,
+    select_from_multi_select,
+    select_day_checkbox,
+    get_text_below_element
 )
 from Framework.elementConstruct import construct_element
 
@@ -40,7 +48,7 @@ THINKTIME = 1
 # ---------- Loop through Excel rows ----------
 for row in sheet.iter_rows(min_row=2, values_only=True):
     (name, email, phone, address, gender, days, country, color, 
-     date1, upload_file) = row[:10]  # Adjust columns if needed
+     date1,date2,date_range_section, upload_file) = row[:12]  # Adjust columns if needed
 
     print(f"\nRunning test for {name}")
 
@@ -70,20 +78,8 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     # --- Days checkboxes ---
     if days:
         for day in days.split(","):
-            day = day.strip()
-            try:
-                xPath = f"//input[@id='{day.lower()}' and contains(@value,'{day.lower()}')]"
-                print(f"xPath: {xPath}")
-                checkbox = driver.find_element(By.XPATH, xPath)
-                checkbox.click()
-                time.sleep(THINKTIME + 1)
-                print(f"Checked Day: {day}")
-                #get checkbox selected or not
-                is_selected = checkbox.is_selected()
-                print(f"Checkbox Selected: {is_selected}")
-
-            except:
-                print(f"Checkbox for {day} not found")
+            is_selected = select_day_checkbox(driver, day)
+            time.sleep(THINKTIME)
     # --- Country dropdown ---
     if country:
         country_select = driver.find_element(By.ID, "country")
@@ -98,24 +94,15 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     # --- Sorted List (Multi-select) ---
     try:
         sorted_list = driver.find_element(By.XPATH, "//select[contains(@class, 'sorted') or @multiple]")
-        from selenium.webdriver.support.ui import Select
-        select_obj = Select(sorted_list)
         
         # Select multiple options from the sorted list
         options_to_select = ["Cat", "Dog", "Deer"]  # You can customize this
-        for option in options_to_select:
-            try:
-                select_obj.select_by_visible_text(option)
-                print(f"Selected from sorted list: {option}")
-            except:
-                print(f"Option '{option}' not found in sorted list")
+        selected_options = select_from_multi_select(driver, sorted_list, options_to_select)
         
-        # Get selected options
-        selected_options = [option.text for option in select_obj.all_selected_options]
         print(f"All selected options: {selected_options}")
         
-    except:
-        print("Sorted List not found")
+    except Exception as e:
+        print(f"Sorted List not found: {e}")
     time.sleep(THINKTIME)
     # --- Date picker 1 (mm/dd/yyyy) ---
     if date1:
@@ -123,29 +110,8 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
             date_str = date1.strftime("%m/%d/%Y") if hasattr(date1, 'strftime') else str(date1)
             date_field = driver.find_element(By.ID, "datepicker")
             
-            # Click on the date picker to open the calendar
-            date_field.click()
-            time.sleep(1)
-            print("Date Picker 1 opened")
-            
-            # Clear and enter the date
-            date_field.clear()
-            date_field.send_keys(date_str)
-            time.sleep(1)
-            
-            # Press Tab or click outside to close the date picker
-            from selenium.webdriver.common.keys import Keys
-            date_field.send_keys(Keys.TAB)
-            time.sleep(1)
-            
-            # Alternative: Click somewhere else to close the picker
-            try:
-                # Click on a neutral area to close the date picker
-                driver.find_element(By.TAG_NAME, "body").click()
-                time.sleep(1)
-            except:
-                pass
-            
+            # Use the reusable function for date picker interaction
+            interact_with_date_picker(driver, date_field, date_str)
             print(f"Date Picker 1 set to: {date_str} and closed")
             
         except Exception as e:
@@ -153,124 +119,89 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     time.sleep(THINKTIME)
     
     # --- Date picker 2 (dd/mm/yyyy) ---
-    try:
-        # Try multiple possible selectors for date picker 2
-        date_field2 = None
-        selectors = [
-            "//input[@placeholder='dd/mm/yyyy']",
-            "//input[contains(@placeholder, 'dd/mm')]",
-            "//input[@id='datepicker2']",
-            "//label[contains(text(), 'Date Picker 2')]/following-sibling::input",
-            "//label[contains(text(), 'Date Picker 2')]/parent::*/input"
-        ]
-        
-        for selector in selectors:
-            try:
-                date_field2 = driver.find_element(By.XPATH, selector)
-                break
-            except:
-                continue
-                
-        if date_field2:
-            if date1:
-                # Convert to dd/mm/yyyy format
-                date_str2 = date1.strftime("%d/%m/%Y") if hasattr(date1, 'strftime') else "15/08/2024"
-            else:
-                date_str2 = "15/08/2024"  # Default date
-            pick_date(date_field2, date_str2)
-            print(f"Date Picker 2 set to: {date_str2}")
-        else:
-            print("Date Picker 2 not found with any selector")
-    except Exception as e:
-        print(f"Date Picker 2 error: {e}")
+
+    if date2:
+        try:
+            date_str2 = date2.strftime("%m/%d/%Y") if hasattr(date2, 'strftime') else str(date2)
+            date_field2 = driver.find_element(By.ID, "txtDate")
+            
+            # Use the reusable function for date picker interaction
+            interact_with_date_picker(driver, date_field2, date_str2)
+            print(f"Date Picker 2 set to: {date_str2} and closed")
+    
+        except Exception as e:
+            print(f"Error with Date Picker 2: {e}")
     time.sleep(THINKTIME)
     
     # --- Date Range Picker (Date Picker 3) ---
     try:
         # Scroll down to find the date range picker section
+        scroll_to_element(driver, driver.find_element(By.TAG_NAME, "body"))
         driver.execute_script("window.scrollTo(0, 800);")
         time.sleep(1)
         
-        # Look specifically for Date Picker 3 section
-        date_range_section = None
-        try:
-            # Try to find the Date Picker 3 label
-            date_range_section = driver.find_element(By.id,"start-date")
-        except:
-            try:
-                # Alternative: look for date range related text
-                date_range_section = driver.find_element(By.id,"start-date")
-            except:
-                print("Date Picker 3 section not found")
-        
+        # Check if we have a date range value from Excel
         if date_range_section:
-            # Find input fields within the date picker 3 section
+            print(f"Using date range from Excel: {date_range_section}")
+            
+            # Use our enhanced parse_date_range function
+            from Framework.actions import parse_date_range
+            start_date, end_date = parse_date_range(date_range_section)
+            
+            if start_date and end_date:
+                print(f"Parsed date range: {start_date} to {end_date}")
+            else:
+                # Fallback to default dates if parsing failed
+                start_date = "08/15/2024"
+                end_date = "08/25/2024"
+                print(f"Failed to parse date range, using defaults: {start_date} to {end_date}")
+        else:
+            # Default dates if none provided in Excel
+            start_date = "08/15/2024"
+            end_date = "08/25/2024"
+            print("No date range provided in Excel, using defaults")
+            
+        # Look specifically for Date Picker 3 section
+        date_range_element = None
+        try:
+            # Try to find the Date Picker 3 label or start-date field
+            selectors = [
+                (By.ID, "start-date"),
+                (By.XPATH, "//label[contains(text(), 'Date Picker 3')]"),
+                (By.XPATH, "//label[contains(text(), 'Date Range')]"),
+                (By.XPATH, "//*[contains(text(), 'Select a Date Range')]")
+            ]
+            date_range_element = find_element_by_multiple_selectors(driver, selectors)
+        except Exception as e:
+            print(f"Date Picker 3 search error: {e}")
+        
+        if date_range_element:
             try:
                 # Look for input fields near the Date Picker 3 section
-                section_parent = date_range_section.find_element(By.XPATH, "./parent::*")
+                section_parent = date_range_element.find_element(By.XPATH, "./parent::*")
                 range_inputs = section_parent.find_elements(By.XPATH, ".//input[@placeholder='mm/dd/yyyy']")
                 
                 if len(range_inputs) >= 2:
                     start_date_field = range_inputs[0]
                     end_date_field = range_inputs[1]
                     
-                    # Clear any existing values first
-                    start_date_field.clear()
-                    end_date_field.clear()
-                    
-                    # Set start and end dates for range
-                    start_date = "08/15/2024"
-                    end_date = "08/25/2024"
-                    
-                    # Use JavaScript to set the values to avoid conflicts
-                    driver.execute_script("arguments[0].value = arguments[1];", start_date_field, start_date)
-                    driver.execute_script("arguments[0].value = arguments[1];", end_date_field, end_date)
-                    
-                    # Trigger change events
-                    driver.execute_script("arguments[0].dispatchEvent(new Event('change'));", start_date_field)
-                    driver.execute_script("arguments[0].dispatchEvent(new Event('change'));", end_date_field)
-                    
-                    time.sleep(2)
-                    print(f"Date Range set: {start_date} to {end_date}")
-                    
-                    # Try to capture the days count output
-                    try:
-                        # Wait a bit for the calculation to appear
-                        time.sleep(1)
+                    # Use our reusable function to set date range with values from Excel or defaults
+                    set_date_range(driver, start_date_field, end_date_field, start_date, end_date)
+
+                    # Look for days output using find_element_with_text
+                    days_output = find_element_with_text(driver, "days")
+                    if days_output and days_output.is_displayed():
+                        print(f"Days selected output: {days_output.text}")
+                    else:
+                        print("Days output not found directly")
                         
-                        # Look for days output near the date range section
-                        days_selectors = [
-                            ".//*[contains(text(), 'days')]",
-                            ".//*[contains(text(), 'selected')]",
-                            ".//*[contains(text(), 'total')]",
-                            ".//span[contains(@class, 'result')]",
-                            ".//div[contains(@class, 'result')]"
-                        ]
-                        
-                        days_found = False
-                        for selector in days_selectors:
-                            try:
-                                days_output = section_parent.find_element(By.XPATH, selector)
-                                if days_output.is_displayed() and days_output.text.strip():
-                                    print(f"Days selected output: {days_output.text}")
-                                    days_found = True
-                                    break
-                            except:
-                                continue
-                        
-                        if not days_found:
-                            # Look for any numeric output that might be the days count
-                            all_text_elements = section_parent.find_elements(By.XPATH, ".//*[text()]")
-                            for element in all_text_elements:
-                                text = element.text.strip()
-                                if text.isdigit() or any(keyword in text.lower() for keyword in ['day', 'selected', 'total']):
-                                    print(f"Possible days output: {text}")
-                                    break
-                            else:
-                                print("Days output not found")
+                        # Try other text that might indicate days
+                        for keyword in ["selected", "total", "range"]:
+                            element = find_element_with_text(driver, keyword)
+                            if element and element.is_displayed():
+                                print(f"Possible days output: {element.text}")
+                                break
                                 
-                    except Exception as e:
-                        print(f"Error finding days output: {e}")
                 else:
                     print("Could not find 2 date input fields in Date Picker 3 section")
                     
@@ -289,21 +220,12 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
                     end_date_field = all_date_inputs[-1]
                     
                     # Scroll to these elements
-                    driver.execute_script("arguments[0].scrollIntoView();", start_date_field)
+                    scroll_to_element(driver, start_date_field)
                     time.sleep(1)
                     
-                    start_date_field.clear()
-                    end_date_field.clear()
+                    # Use date range from Excel or the defaults we already set above
+                    set_date_range(driver, start_date_field, end_date_field, start_date, end_date)
                     
-                    start_date = "08/15/2024"
-                    end_date = "08/25/2024"
-                    
-                    start_date_field.send_keys(start_date)
-                    time.sleep(1)
-                    end_date_field.send_keys(end_date)
-                    time.sleep(2)
-                    
-                    print(f"Date Range set (fallback method): {start_date} to {end_date}")
                 else:
                     print("Not enough date inputs found for date range")
                     
@@ -316,28 +238,39 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     # --- File Upload ---
     try:
         if upload_file:
-            # Try multiple selectors for file upload
-            file_input = None
-            file_selectors = [
-                "//input[@id='filename']",
-                "//input[@type='file']",
-                "//input[@name='file']",
-                "//input[contains(@id, 'file')]",
-                "//label[contains(text(), 'Choose file') or contains(text(), 'Upload')]/following-sibling::input",
-                "//label[contains(text(), 'Choose file') or contains(text(), 'Upload')]/parent::*/input"
-            ]
+            # Try single file upload using the new HTML structure
+            success = upload_file_with_submit(
+                driver=driver,
+                file_input_id="singleFileInput",
+                file_path=upload_file,
+                form_id="singleFileForm",
+                submit_button_xpath="//button[@type='submit' and text()='Upload Single File']",
+                status_id="singleFileStatus"
+            )
             
-            for selector in file_selectors:
+            # If single file upload fails, try multiple files form if available
+            if not success:
                 try:
-                    file_input = driver.find_element(By.XPATH, selector)
-                    break
-                except:
-                    continue
-            
-            if file_input:
-                upload_file(file_input, upload_file)
-            else:
-                print("File upload element not found with any selector")
+                    # Look for multiple files form and attempt to use it
+                    multiple_form = driver.find_element(By.ID, "multipleFilesForm")
+                    if multiple_form:
+                        # Try to find file input in the multiple files form
+                        multiple_file_inputs = driver.find_elements(By.XPATH, "//form[@id='multipleFilesForm']//input[@type='file']")
+                        if multiple_file_inputs:
+                            upload_file(multiple_file_inputs[0], upload_file)
+                            # Submit the form if needed
+                            try:
+                                multiple_form.submit()
+                                print("Multiple files form submitted")
+                                
+                                # Check status
+                                status = driver.find_element(By.ID, "multipleFilesStatus")
+                                if status:
+                                    print(f"Multiple upload status: {status.text}")
+                            except Exception as submit_error:
+                                print(f"Error submitting multiple files form: {submit_error}")
+                except Exception as multi_error:
+                    print(f"Multiple file upload failed: {multi_error}")
         else:
             print("No file specified for upload")
     except Exception as e:
@@ -348,10 +281,7 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     click(driver, submit)
     print("Clicked Submit button")
     
-    # Take screenshot after submission
-    #screenshot_path = os.path.join(os.path.dirname(__file__), f"screenshot_{name or 'test'}.png")
-    #take_screenshot(driver, screenshot_path)
-    
+    time.sleep(3)
     # Check for any success/error messages
     try:
         # Look for any alert or message after submission
@@ -438,15 +368,59 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     time.sleep(THINKTIME)
     
     # --- Read Dynamic Table ---
-    print("\nDynamic Table:")
+    print("\nDynamic Web Table:")
     try:
-        dynamic_table = driver.find_element(By.XPATH, "//table[@border='1' and .//th[text()='Name']]")
+        # First, scroll to the Dynamic Web Table section to ensure it's in view
+        try:
+            table_header = driver.find_element(By.XPATH, "//h2[contains(text(),'Dynamic Web Table')]")
+            driver.execute_script("arguments[0].scrollIntoView(true);", table_header)
+            print("Scrolled to Dynamic Web Table section")
+        except Exception as scroll_error:
+            print(f"Could not scroll to Dynamic Web Table: {scroll_error}")
+        
+        # Find the dynamic table using the ID from the HTML source
+        dynamic_table = driver.find_element(By.ID, "taskTable")
+        
+        # Extract all table data
         dynamic_data = get_table_data(dynamic_table)
-        print("Dynamic Table Data:")
-        for i, row in enumerate(dynamic_data):
-            print(f"Row {i}: {row}")
-    except:
-        print("Dynamic table not found")
+        
+        # Print header and top three rows
+        print("\n=== TOP 3 ROWS FROM DYNAMIC TABLE ===")
+        for i, row in enumerate(dynamic_data[:4]):  # Header + 3 rows
+            if i == 0:
+                print(f"Header: {' | '.join(str(cell) for cell in row)}")
+                print("-" * 60)
+            else:
+                print(f"Row {i}: {' | '.join(str(cell) for cell in row)}")
+                
+        # Now extract the text information below the table
+        print("\n=== TEXT BELOW DYNAMIC TABLE ===")
+        
+        # Method 1: Find text below table using class name from HTML source
+        try:
+            display_values = driver.find_element(By.ID, "displayValues")
+            if display_values:
+                print(f"Display Values content: {display_values.text}")
+        except Exception as e1:
+            print(f"Could not find display values by ID: {e1}")
+            
+            # Method 2: Use our new function to get text below the table
+            below_table_text = get_text_below_element(driver, dynamic_table, "div.display-values")
+            if below_table_text:
+                for i, text in enumerate(below_table_text):
+                    print(f"Text {i+1}: {text}")
+            else:
+                # Method 3: Use XPath to get elements after the table
+                try:
+                    text_elements = driver.find_elements(By.XPATH, 
+                        "//table[@id='taskTable']/following::div[contains(text(), 'CPU') or contains(text(), 'Memory') or contains(text(), 'Network') or contains(text(), 'Disk')]")
+                    for elem in text_elements:
+                        print(elem.text)
+                except Exception as e2:
+                    print(f"Could not find text below table: {e2}")
+                    
+    except Exception as table_error:
+        print(f"Dynamic table error: {table_error}")
     
     # --- Pagination Test (if available) ---
     try:
@@ -499,4 +473,6 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
 
 # Close browser
 driver.quit()
+
+# Print completion message
 print("\nAll tests completed successfully")
