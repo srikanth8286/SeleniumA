@@ -1,112 +1,109 @@
-
-
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.by import By
+import re
+import datetime
 import time
 
-# Click element
+# Click an element
 def click_element(driver, element):
     try:
         element.click()
-        print("Clicked element")
+        print(f"Clicked element: {element}")
+        return True
     except Exception as e:
         print(f"Error clicking element: {e}")
+        return False
 
-# Input text
+# Input text into element
 def input_text(element, text):
     try:
         element.clear()
         element.send_keys(text)
-        print(f"Input text: {text}")
+        print(f"Entered text: {text}")
+        return True
     except Exception as e:
-        print(f"Error inputting text: {e}")
+        print(f"Error entering text: {e}")
+        return False
 
 # Select radio button
 def select_radio(element):
     try:
-        if not element.is_selected():
-            element.click()
-        print("Radio selected")
+        element.click()
+        print(f"Selected radio: {element}")
+        return True
     except Exception as e:
         print(f"Error selecting radio: {e}")
+        return False
 
-# Select dropdown by visible text
+# Select dropdown option by visible text
 def select_dropdown_by_text(element, text):
-    from selenium.webdriver.support.ui import Select
     try:
         select = Select(element)
         select.select_by_visible_text(text)
-        print(f"Dropdown selected: {text}")
+        print(f"Selected dropdown option: {text}")
+        return True
     except Exception as e:
         print(f"Error selecting dropdown: {e}")
+        return False
 
-# Select multiple options in multi-select
-def select_multiple_options(element, options):
-    from selenium.webdriver.support.ui import Select
-    try:
-        select = Select(element)
-        for option in options:
-            select.select_by_visible_text(option)
-        print(f"Selected options: {options}")
-    except Exception as e:
-        print(f"Error selecting multiple options: {e}")
-
-# Upload file
+# Upload file via input element
 def upload_file(element, file_path):
     try:
         element.send_keys(file_path)
         print(f"File uploaded: {file_path}")
+        return True
     except Exception as e:
         print(f"Error uploading file: {e}")
+        return False
 
-# Upload file with form submission
+# Enhanced file upload with form submission and status check
 def upload_file_with_submit(driver, file_input_id, file_path, form_id=None, submit_button_xpath=None, status_id=None):
-    """
-    Enhanced file upload function that handles the complete file upload process including form submission.
-    
-    Args:
-        driver: WebDriver instance
-        file_input_id: ID of the file input element
-        file_path: Path to the file to upload
-        form_id: Optional - ID of the form to submit
-        submit_button_xpath: Optional - XPath of the submit button
-        status_id: Optional - ID of the element displaying upload status
-    
-    Returns:
-        bool: True if upload was successful, False otherwise
-    """
     try:
-        # Find file input element
-        file_input = driver.find_element(By.ID, file_input_id)
-        file_input.send_keys(file_path)
-        print(f"File selected: {file_path}")
+        # Find file input and upload file
+        try:
+            file_input = driver.find_element(By.ID, file_input_id)
+            file_input.send_keys(file_path)
+            print(f"File selected: {file_path}")
+        except Exception as input_error:
+            print(f"Error finding file input or uploading file: {input_error}")
+            
+            # Try alternative approach with xpath
+            try:
+                file_input = driver.find_element(By.XPATH, f"//input[@id='{file_input_id}']")
+                file_input.send_keys(file_path)
+                print(f"File selected using xpath: {file_path}")
+            except Exception as xpath_error:
+                print(f"Error with xpath approach: {xpath_error}")
+                return False
         
-        # Submit the form if needed
-        if submit_button_xpath:
+        # Submit the form if form_id is provided
+        if form_id:
+            try:
+                form = driver.find_element(By.ID, form_id)
+                form.submit()
+                print("Form submitted by form.submit()")
+            except Exception as form_error:
+                print(f"Error submitting form: {form_error}")
+                return False
+        
+        # Click submit button if provided
+        elif submit_button_xpath:
             try:
                 submit_button = driver.find_element(By.XPATH, submit_button_xpath)
                 submit_button.click()
-                print("Submit button clicked")
-            except Exception as e:
-                print(f"Error clicking submit button: {e}")
-                # Try form submission as fallback
-                if form_id:
-                    try:
-                        form = driver.find_element(By.ID, form_id)
-                        form.submit()
-                        print(f"Form {form_id} submitted directly")
-                    except Exception as form_error:
-                        print(f"Error submitting form: {form_error}")
+                print(f"Submit button clicked: {submit_button_xpath}")
+            except Exception as button_error:
+                print(f"Error clicking submit button: {button_error}")
+                return False
         
-        # Check status if needed
+        # Check upload status if status_id is provided
         if status_id:
             try:
-                WebDriverWait(driver, 5).until(
-                    EC.visibility_of_element_located((By.ID, status_id))
-                )
-                status_element = driver.find_element(By.ID, status_id)
+                # Wait for status to appear
+                wait = WebDriverWait(driver, 10)
+                status_element = wait.until(EC.presence_of_element_located((By.ID, status_id)))
                 print(f"Upload status: {status_element.text}")
             except Exception as status_error:
                 print(f"Could not retrieve upload status: {status_error}")
@@ -116,267 +113,261 @@ def upload_file_with_submit(driver, file_input_id, file_path, form_id=None, subm
         print(f"Error during file upload process: {e}")
         return False
 
-# Handle alert
-def accept_alert(driver):
-    try:
-        alert = driver.switch_to.alert
-        alert.accept()
-        print("Alert accepted")
-    except Exception as e:
-        print(f"Error accepting alert: {e}")
-
-# Switch to iframe
-def switch_to_iframe(driver, iframe_element):
-    try:
-        driver.switch_to.frame(iframe_element)
-        print("Switched to iframe")
-    except Exception as e:
-        print(f"Error switching to iframe: {e}")
-
-# Drag and drop
-def drag_and_drop(driver, source, target):
-    try:
-        ActionChains(driver).drag_and_drop(source, target).perform()
-        print("Drag and drop performed")
-    except Exception as e:
-        print(f"Error in drag and drop: {e}")
-
-# Scroll to element
+# Scroll to an element
 def scroll_to_element(driver, element):
     try:
-        driver.execute_script("arguments[0].scrollIntoView();", element)
+        driver.execute_script("arguments[0].scrollIntoView(true);", element)
         print("Scrolled to element")
+        return True
     except Exception as e:
         print(f"Error scrolling to element: {e}")
+        return False
 
 # Validate element text
 def validate_text(element, expected_text):
     try:
-        actual = element.text.strip()
-        assert actual == expected_text, f"Expected '{expected_text}', got '{actual}'"
-        print("Text validated")
+        actual_text = element.text
+        is_valid = actual_text == expected_text
+        print(f"Text validation: {'Passed' if is_valid else 'Failed'}, Expected: '{expected_text}', Actual: '{actual_text}'")
+        return is_valid
     except Exception as e:
-        print(f"Text validation failed: {e}")
+        print(f"Error validating text: {e}")
+        return False
 
 # Take screenshot
 def take_screenshot(driver, file_path):
     try:
         driver.save_screenshot(file_path)
         print(f"Screenshot saved: {file_path}")
+        return True
     except Exception as e:
         print(f"Error taking screenshot: {e}")
+        return False
 
-# Wait for element to be clickable
-def wait_for_clickable(driver, by, value, timeout=10):
-    try:
-        element = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, value)))
-        print("Element is clickable")
-        return element
-    except Exception as e:
-        print(f"Element not clickable: {e}")
-        return None
-
-# Wait for element presence
-def wait_for_presence(driver, by, value, timeout=10):
-    try:
-        element = WebDriverWait(driver, timeout).until(EC.presence_of_element_located((by, value)))
-        print("Element is present")
-        return element
-    except Exception as e:
-        print(f"Element not present: {e}")
-        return None
-
-# Pick date (for input type="date")
+# Select date in date picker
 def pick_date(element, date_str):
     try:
         element.clear()
         element.send_keys(date_str)
-        print(f"Date set: {date_str}")
+        print(f"Date selected: {date_str}")
+        return True
     except Exception as e:
-        print(f"Error setting date: {e}")
+        print(f"Error picking date: {e}")
+        return False
 
-# Hover over element
-def hover_over_element(driver, element):
-    try:
-        ActionChains(driver).move_to_element(element).perform()
-        print("Hovered over element")
-    except Exception as e:
-        print(f"Error hovering: {e}")
-
-# Read table data
+# Extract data from an HTML table
 def get_table_data(table_element):
     try:
         rows = table_element.find_elements(By.TAG_NAME, "tr")
-        data = []
+        table_data = []
         for row in rows:
-            cols = row.find_elements(By.TAG_NAME, "td") or row.find_elements(By.TAG_NAME, "th")
-            data.append([col.text for col in cols])
-        print("Table data extracted")
-        return data
+            row_data = []
+            cells = row.find_elements(By.TAG_NAME, "td")
+            if not cells:  # Try th for header row
+                cells = row.find_elements(By.TAG_NAME, "th")
+            for cell in cells:
+                row_data.append(cell.text)
+            if row_data:  # Only add non-empty rows
+                table_data.append(row_data)
+        print(f"Table data extracted: {len(table_data)} rows")
+        return table_data
     except Exception as e:
-        print(f"Error reading table: {e}")
+        print(f"Error extracting table data: {e}")
         return []
-        
-# Get text from elements below a target element
+
+# Get text content below a specific element
 def get_text_below_element(driver, target_element, selector_pattern=None):
-    """
-    Extracts text from elements that appear below a target element in the DOM.
-    
-    Args:
-        driver: WebDriver instance
-        target_element: The reference element to start searching from
-        selector_pattern: Optional CSS or XPath selector to filter elements
-        
-    Returns:
-        List of text strings from elements found below the target
-    """
     try:
-        # Get all text elements below the target using JavaScript
-        if selector_pattern:
-            # Use provided selector if available
-            script = """
-                var target = arguments[0];
-                var results = [];
-                var elements = document.querySelectorAll(arguments[1]);
+        # Get all text nodes after the target element
+        text_script = """
+            function getTextNodesAfter(element) {
+                let result = [];
+                let found = false;
                 
-                // Filter elements that are after the target in the DOM
-                for (var i = 0; i < elements.length; i++) {
-                    var element = elements[i];
-                    if (target.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                        if (element.textContent && element.textContent.trim() !== '') {
-                            results.push(element.textContent.trim());
+                function traverse(node) {
+                    if (node === element) {
+                        found = true;
+                        return;
+                    }
+                    
+                    if (found && node.nodeType === 3 && node.textContent.trim()) {
+                        // Text node with non-empty content
+                        result.push(node.textContent.trim());
+                    } else if (node.nodeType === 1) {
+                        // Element node
+                        if (found && (
+                            node.tagName === 'P' || 
+                            node.tagName === 'DIV' || 
+                            node.tagName === 'SPAN' ||
+                            node.tagName === 'LI'
+                        )) {
+                            if (node.textContent.trim()) {
+                                result.push(node.textContent.trim());
+                            }
                         }
-                    }
-                }
-                return results;
-            """
-            return driver.execute_script(script, target_element, selector_pattern)
-        else:
-            # Default approach - get text from siblings that follow the target
-            script = """
-                var target = arguments[0];
-                var results = [];
-                var node = target;
-                
-                // Get text from following siblings
-                while (node = node.nextSibling) {
-                    if (node.nodeType === Node.ELEMENT_NODE && node.textContent && node.textContent.trim() !== '') {
-                        results.push(node.textContent.trim());
-                    }
-                }
-                
-                // If no siblings with text, try parent's next siblings
-                if (results.length === 0) {
-                    node = target.parentNode;
-                    while (node = node.nextSibling) {
-                        if (node.nodeType === Node.ELEMENT_NODE && node.textContent && node.textContent.trim() !== '') {
-                            results.push(node.textContent.trim());
+                        
+                        // Check children
+                        for (let i = 0; i < node.childNodes.length; i++) {
+                            traverse(node.childNodes[i]);
                         }
                     }
                 }
                 
-                return results;
-            """
-            return driver.execute_script(script, target_element)
+                traverse(document.body);
+                return result;
+            }
+            return getTextNodesAfter(arguments[0]);
+        """
+        text_items = driver.execute_script(text_script, target_element)
+        
+        # Filter by pattern if provided
+        if selector_pattern and text_items:
+            pattern = re.compile(selector_pattern)
+            filtered_items = [item for item in text_items if pattern.search(item)]
+            print(f"Found {len(filtered_items)} text items matching pattern")
+            return filtered_items
+        
+        print(f"Found {len(text_items)} text items below element")
+        return text_items
     except Exception as e:
         print(f"Error getting text below element: {e}")
         return []
 
-# Enhanced date picker interaction (click, enter value, close)
+# Function to interact with date picker
 def interact_with_date_picker(driver, element, date_str):
     try:
-        from selenium.webdriver.common.keys import Keys
-        
-        # Click to open calendar
-        element.click()
-        time.sleep(1)
-        
-        # Clear and enter date
+        # First try simple approach
         element.clear()
         element.send_keys(date_str)
-        time.sleep(1)
+        print(f"Date entered: {date_str}")
         
-        # Close the calendar by pressing Tab
-        element.send_keys(Keys.TAB)
-        time.sleep(1)
-        
-        # Alternative: click elsewhere to close it
+        # Handle calendar if it appears
         try:
-            driver.find_element(By.TAG_NAME, "body").click()
-        except:
+            # Look for calendar day element
+            date_obj = datetime.datetime.strptime(date_str, "%m/%d/%Y")
+            day = str(date_obj.day)
+            
+            # Wait for a short time to see if calendar appears
+            time.sleep(0.5)
+            
+            # Try to find and click the day
+            calendar_days = driver.find_elements(By.CSS_SELECTOR, ".ui-datepicker-calendar td a")
+            for cal_day in calendar_days:
+                if cal_day.text == day:
+                    cal_day.click()
+                    print(f"Clicked day {day} in calendar")
+                    break
+        except Exception as calendar_error:
+            # Calendar may not have appeared, which is fine
             pass
             
-        print(f"Date picker interaction completed with date: {date_str}")
+        return True
     except Exception as e:
-        print(f"Error with date picker interaction: {e}")
+        print(f"Error interacting with date picker: {e}")
+        return False
 
-# Set date range with two date inputs
+# Set date range with start and end dates
 def set_date_range(driver, start_field, end_field, start_date, end_date):
     try:
-        # Clear existing values
-        start_field.clear()
-        end_field.clear()
+        # Set start date
+        success_start = interact_with_date_picker(driver, start_field, start_date)
         
-        # Use JavaScript for reliable input
-        driver.execute_script("arguments[0].value = arguments[1];", start_field, start_date)
-        driver.execute_script("arguments[0].value = arguments[1];", end_field, end_date)
+        # Set end date
+        success_end = interact_with_date_picker(driver, end_field, end_date)
         
-        # Trigger change events
-        driver.execute_script("arguments[0].dispatchEvent(new Event('change'));", start_field)
-        driver.execute_script("arguments[0].dispatchEvent(new Event('change'));", end_field)
-        
-        print(f"Date range set: {start_date} to {end_date}")
-        return True
+        if success_start and success_end:
+            print(f"Date range set: {start_date} to {end_date}")
+            
+            # Take screenshot to verify
+            screenshot_path = "date_range_test.png"
+            driver.save_screenshot(screenshot_path)
+            print(f"Screenshot saved to {screenshot_path}")
+            
+            return True
+        else:
+            print("Failed to set complete date range")
+            return False
+            
     except Exception as e:
         print(f"Error setting date range: {e}")
         return False
 
-# Find element by multiple selectors
+# Function to find elements using multiple different selectors
 def find_element_by_multiple_selectors(driver, selectors, wait_time=5):
-    element = None
+    """
+    Try to find an element using multiple selector strategies.
     
-    for selector in selectors:
-        selector_type = selector[0]
-        selector_value = selector[1]
+    Args:
+        driver: WebDriver instance
+        selectors: Dictionary with keys as selector type (id, xpath, css, etc.) and values as selector strings
+        wait_time: Time to wait for element
+        
+    Returns:
+        First element found or None if not found
+    """
+    for selector_type, selector_value in selectors.items():
         try:
-            if wait_time > 0:
-                element = WebDriverWait(driver, wait_time).until(
-                    EC.presence_of_element_located((selector_type, selector_value))
-                )
+            wait = WebDriverWait(driver, wait_time)
+            if selector_type.lower() == 'id':
+                element = wait.until(EC.presence_of_element_located((By.ID, selector_value)))
+            elif selector_type.lower() == 'xpath':
+                element = wait.until(EC.presence_of_element_located((By.XPATH, selector_value)))
+            elif selector_type.lower() == 'css':
+                element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selector_value)))
+            elif selector_type.lower() == 'name':
+                element = wait.until(EC.presence_of_element_located((By.NAME, selector_value)))
             else:
-                element = driver.find_element(selector_type, selector_value)
-            if element:
-                print(f"Found element using {selector_type}: {selector_value}")
-                break
-        except:
+                continue
+                
+            print(f"Element found using {selector_type}: {selector_value}")
+            return element
+        except Exception:
             continue
-            
-    return element
+    
+    print(f"Element not found using any of the provided selectors")
+    return None
 
-# Find element that contains text
+# Find an element containing specific text
 def find_element_with_text(driver, text_to_find, tag_name="*"):
     try:
         xpath = f"//{tag_name}[contains(text(), '{text_to_find}')]"
         element = driver.find_element(By.XPATH, xpath)
+        print(f"Found element with text: {text_to_find}")
         return element
     except Exception as e:
-        print(f"Could not find element containing text '{text_to_find}': {e}")
+        print(f"Error finding element with text '{text_to_find}': {e}")
         return None
 
-# Select multiple items from a multi-select list
+# Select options from multi-select element
 def select_from_multi_select(driver, element, options_to_select):
     try:
-        from selenium.webdriver.support.ui import Select
-        select_obj = Select(element)
+        # Ensure element is a select element
+        if element.tag_name.lower() != "select":
+            print("Element is not a select element")
+            return []
         
+        # Create Select object
+        select = Select(element)
+        
+        # Check if it's a multi-select
+        if not select.is_multiple:
+            print("This is not a multi-select element")
+            return []
+        
+        # Clear existing selections
+        select.deselect_all()
+        
+        # Track successfully selected options
         selected_options = []
-        for option in options_to_select:
+        
+        # Select requested options
+        for option_text in options_to_select:
             try:
-                select_obj.select_by_visible_text(option)
-                selected_options.append(option)
-                print(f"Selected option: {option}")
-            except:
-                print(f"Option '{option}' not found or could not be selected")
+                select.select_by_visible_text(option_text)
+                selected_options.append(option_text)
+                print(f"Selected option: {option_text}")
+            except Exception as option_error:
+                print(f"Could not select option '{option_text}': {option_error}")
         
         # Return actually selected items
         return selected_options
@@ -397,3 +388,22 @@ def select_day_checkbox(driver, day):
     except Exception as e:
         print(f"Checkbox for '{day}' not found or could not be clicked: {e}")
         return False
+
+# Parse date range from text (since this is referenced in Sample.py but missing)
+def parse_date_range(text):
+    try:
+        # Expected format: "Start Date: mm/dd/yyyy, End Date: mm/dd/yyyy"
+        pattern = r"Start Date: (\d{2}/\d{2}/\d{4}),\s*End Date: (\d{2}/\d{2}/\d{4})"
+        match = re.search(pattern, text)
+        
+        if match:
+            start_date = match.group(1)
+            end_date = match.group(2)
+            print(f"Parsed date range: {start_date} to {end_date}")
+            return start_date, end_date
+        else:
+            print("Could not parse date range, using defaults")
+            return "01/01/2023", "12/31/2023"  # Default fallback
+    except Exception as e:
+        print(f"Error parsing date range: {e}")
+        return "01/01/2023", "12/31/2023"  # Default fallback
