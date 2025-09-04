@@ -7,6 +7,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.action_chains import ActionChains
 import openpyxl
 import time
 from Framework.actions import (
@@ -93,7 +94,7 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     
     # --- Sorted List (Multi-select) ---
     try:
-        sorted_list = driver.find_element(By.XPATH, "//select[contains(@class, 'sorted') or @multiple]")
+        sorted_list = driver.find_element(By.XPATH, "//*[@id='animals']")
         
         # Select multiple options from the sorted list
         options_to_select = ["Cat", "Dog", "Deer"]  # You can customize this
@@ -118,12 +119,12 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
             print(f"Error with Date Picker 1: {e}")
     time.sleep(THINKTIME)
     
-    # --- Date picker 2 (dd/mm/yyyy) ---
+    # --- Date picker 2 (dd/mm/yyyy), select it and click on the date ---
 
     if date2:
         try:
-            date_str2 = date2.strftime("%m/%d/%Y") if hasattr(date2, 'strftime') else str(date2)
-            date_field2 = driver.find_element(By.ID, "txtDate.hasDatepicker")
+            date_str2 = date2.strftime("%d/%m/%Y") if hasattr(date2, 'strftime') else str(date2)
+            date_field2 = driver.find_element(By.XPATH, "//*[@id='txtDate']")
             
             # Use the reusable function for date picker interaction
             interact_with_date_picker(driver, date_field2, date_str2)
@@ -238,48 +239,154 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     # --- File Upload ---
     try:
         if upload_file:
-            # Try single file upload using the new HTML structure
-            success = upload_file_with_submit(
-                driver=driver,
-                file_input_id="singleFileInput",
-                file_path=upload_file,
-                form_id="singleFileForm",
-                submit_button_xpath="//button[@type='submit' and text()='Upload Single File']",
-                status_id="singleFileStatus"
-            )
+            print("\n=== FILE UPLOAD TEST ===")
             
-            # If single file upload fails, try multiple files form if available
-            if not success:
-                try:
-                    # Look for multiple files form and attempt to use it
-                    multiple_form = driver.find_element(By.ID, "multipleFilesForm")
-                    if multiple_form:
-                        # Try to find file input in the multiple files form
-                        multiple_file_inputs = driver.find_elements(By.XPATH, "//form[@id='multipleFilesForm']//input[@type='file']")
-                        if multiple_file_inputs:
-                            upload_file(multiple_file_inputs[0], upload_file)
-                            # Submit the form if needed
+            # First, find and scroll to the upload section
+            try:
+                upload_section = driver.find_element(By.XPATH, "//h2[contains(text(), 'Upload') and contains(text(), 'Files')] | //div[contains(text(), 'Upload') and contains(text(), 'Files')]")
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center'});", upload_section)
+                print("Scrolled to file upload section")
+                time.sleep(2)  # Wait for scrolling to complete
+            except Exception as scroll_error:
+                print(f"Couldn't find upload section, will try anyway: {scroll_error}")
+                
+            # Single File Upload - Using more flexible approaches to find elements
+            try:
+                # Find file input using various selectors
+                single_file_input = None
+                possible_selectors = [
+                    By.ID, "singleFileInput", 
+                    By.XPATH, "//input[@type='file' and not(@multiple)]",
+                    By.XPATH, "//form[contains(@id, 'single') or contains(@class, 'single')]//input[@type='file']",
+                    By.XPATH, "//input[@type='file'][1]",  # Try first file input as fallback
+                ]
+                
+                for i in range(0, len(possible_selectors), 2):
+                    try:
+                        single_file_input = driver.find_element(possible_selectors[i], possible_selectors[i+1])
+                        print(f"Found single file input using selector: {possible_selectors[i+1]}")
+                        break
+                    except:
+                        continue
+                
+                if single_file_input:
+                    # Upload file directly using send_keys
+                    single_file_input.send_keys(upload_file)
+                    print(f"File selected for single upload: {upload_file}")
+                    time.sleep(1)
+                    
+                    # Try to find and click the submit button
+                    try:
+                        # Try multiple approaches to find the submit button
+                        submit_found = False
+                        submit_selectors = [
+                            "//button[contains(text(), 'Upload') and contains(text(), 'Single')]",
+                            "//button[contains(text(), 'Upload') and contains(@type, 'submit')]",
+                            "//input[@type='submit']",
+                            f"//form[contains(.//input[@type='file']/@id, '{single_file_input.get_attribute('id')}')]//button",
+                            "//button[contains(text(), 'Upload')]"
+                        ]
+                        
+                        for selector in submit_selectors:
                             try:
-                                multiple_form.submit()
-                                print("Multiple files form submitted")
+                                submit_btn = driver.find_element(By.XPATH, selector)
+                                submit_btn.click()
+                                print(f"Clicked submit button found with: {selector}")
+                                submit_found = True
+                                break
+                            except:
+                                continue
                                 
-                                # Check status
-                                status = driver.find_element(By.ID, "multipleFilesStatus")
-                                if status:
-                                    print(f"Multiple upload status: {status.text}")
-                            except Exception as submit_error:
-                                print(f"Error submitting multiple files form: {submit_error}")
-                except Exception as multi_error:
-                    print(f"Multiple file upload failed: {multi_error}")
+                        if not submit_found:
+                            # Try to submit the form directly if we can find it
+                            try:
+                                parent_form = driver.execute_script("return arguments[0].form", single_file_input)
+                                if parent_form:
+                                    parent_form.submit()
+                                    print("Submitted form directly")
+                                    submit_found = True
+                            except Exception as form_error:
+                                print(f"Could not submit form: {form_error}")
+                                
+                        if submit_found:
+                            print("Single file upload submitted")
+                            time.sleep(2)  # Wait for potential status update
+                    except Exception as submit_error:
+                        print(f"Error submitting single file: {submit_error}")
+                else:
+                    print("Could not find single file input element")
+            except Exception as e:
+                print(f"Single file upload failed: {e}")
+            
+            # Multiple File Upload with similar flexible approach
+            try:
+                # Find multiple file input
+                multiple_file_input = None
+                possible_multi_selectors = [
+                    By.ID, "multipleFilesInput",
+                    By.XPATH, "//input[@type='file' and @multiple]",
+                    By.XPATH, "//form[contains(@id, 'multiple') or contains(@class, 'multiple')]//input[@type='file']",
+                    By.XPATH, "(//input[@type='file'])[2]",  # Try second file input as fallback
+                ]
+                
+                for i in range(0, len(possible_multi_selectors), 2):
+                    try:
+                        multiple_file_input = driver.find_element(possible_multi_selectors[i], possible_multi_selectors[i+1])
+                        print(f"Found multiple file input using selector: {possible_multi_selectors[i+1]}")
+                        break
+                    except:
+                        continue
+                
+                if multiple_file_input:
+                    # Upload file
+                    multiple_file_input.send_keys(upload_file)
+                    print(f"File selected for multiple upload: {upload_file}")
+                    time.sleep(1)
+                    
+                    # Find and click submit button with similar flexible approach
+                    try:
+                        # Try multiple approaches to find the submit button
+                        submit_found = False
+                        multi_submit_selectors = [
+                            "//button[contains(text(), 'Upload') and contains(text(), 'Multiple')]",
+                            "//form[contains(@id, 'multiple')]//button[@type='submit']",
+                            f"//form[contains(.//input[@type='file']/@id, '{multiple_file_input.get_attribute('id')}')]//button",
+                        ]
+                        
+                        for selector in multi_submit_selectors:
+                            try:
+                                multi_submit = driver.find_element(By.XPATH, selector)
+                                multi_submit.click()
+                                print(f"Clicked multiple submit button found with: {selector}")
+                                submit_found = True
+                                break
+                            except:
+                                continue
+                                
+                        if not submit_found:
+                            # Try to submit the form directly
+                            try:
+                                parent_form = driver.execute_script("return arguments[0].form", multiple_file_input)
+                                if parent_form:
+                                    parent_form.submit()
+                                    print("Submitted multiple form directly")
+                            except Exception as form_error:
+                                print(f"Could not submit multiple form: {form_error}")
+                                
+                        print("Multiple files upload submitted")
+                        time.sleep(2)  # Wait for status update
+                    except Exception as multi_submit_error:
+                        print(f"Error submitting multiple files: {multi_submit_error}")
+                else:
+                    print("Could not find multiple file input element")
+            except Exception as e:
+                print(f"Multiple files upload failed: {e}")
         else:
             print("No file specified for upload")
     except Exception as e:
         print(f"File upload error: {e}")
     time.sleep(THINKTIME)
-    # --- Submit ---
-    submit = construct_element(driver, By.XPATH, "//input[@value='Submit']")
-    click(driver, submit)
-    print("Clicked Submit button")
+    
     
     time.sleep(3)
     # Check for any success/error messages
@@ -300,7 +407,7 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     
     time.sleep(3)
     
-    # Try to interact with Wikipedia search (if available on page)
+    # Try to interact with Wikipedia search 
     try:
         wiki_search = driver.find_element(By.ID, "Wikipedia1_wikipedia-search-input")
         input_text(wiki_search, "Selenium")
@@ -310,11 +417,19 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
         print("Wikipedia search performed")
     except:
         print("Wikipedia search not available or failed")
-    
+
+    # try intereacting with dynamic button before clicking it is start and after clicking it is stop
+    dynamic_button = driver.find_element(By.XPATH, "//*[@id='HTML5']/div[1]/button")
+    ActionChains(driver).move_to_element(dynamic_button).perform()
+    time.sleep(1)
+    click(driver, dynamic_button)
+    print("Dynamic button clicked-START TO STOP")
+    time.sleep(1)
+
     # Try to interact with double click button 
     try:
         double_click_btn = driver.find_element(By.XPATH, "//*[@id='HTML10']/div[1]/button")
-        ActionChains(driver).double_click(double_click_btn).perform()
+        ActionChains(driver).double_click(double_click_btn).double_click().perform()
         print("Double click performed")
     except:
         print("Double click button not found")
@@ -329,7 +444,35 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     except:
         print("Drag and drop elements not found")
     
+    #new tab button click and close the new tab
     
+    try:
+        new_tab_btn = driver.find_element(By.XPATH, "//*[@id='HTML4']/div[1]/button")
+        click(driver, new_tab_btn)
+        print("New tab button clicked")
+    except:
+        print("New tab button not found")
+
+    # popup window button click
+    try:
+        popup_btn = driver.find_element(By.XPATH, "//*[@id='PopUp']")
+        click(driver, popup_btn)
+        print("Popup window button clicked")
+    except:
+        print("Popup window button not found")
+
+    # scrolling a dropdown and selecting an option
+    try:
+        dropdown = driver.find_element(By.XPATH, "//*[@id='comboBox']")
+        driver.execute_script("arguments[0].scrollIntoView(true);", dropdown)
+        print("Scrolled to dropdown")
+        # Select an option from the dropdown
+        select = Select(dropdown)
+        select.select_by_visible_text("Item 10")
+        print("Selected option from dropdown")
+    except Exception as e:
+        print(f"Error scrolling to dropdown: {e}")
+    time.sleep(THINKTIME)
     # --- Read Static Table ---
     print("\nStatic Web Table:")
     try:
@@ -409,55 +552,185 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
                     
     except Exception as table_error:
         print(f"Dynamic table error: {table_error}")
-    
-    # --- Pagination Test (if available) ---
+
+    # --- Pagination Test  ---
     try:
-        next_button = driver.find_element(By.XPATH, "//a[contains(text(), 'Next') or contains(text(), '»')]")
-        click(driver, next_button)
-        print("Pagination: Clicked Next")
-        time.sleep(2)
-        # Read table again after pagination
-        try:
-            paginated_table = driver.find_element(By.XPATH, "//table[@border='1']")
-            paginated_data = get_table_data(paginated_table)
-            print("Paginated Table Data:")
-            for i, row in enumerate(paginated_data):
-                print(f"Page 2 Row {i}: {row}")
-        except:
-            print("Could not read paginated table")
-    except:
-        print("No pagination found")
-    
-    # --- Scroll and check for additional elements ---
-    try:
-        # Scroll to bottom to load any lazy-loaded content
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
-        print("Scrolled to bottom of page")
+        print("\n=== PAGINATION TABLE TEST ===")
         
-        # Look for any additional buttons or elements
-        buttons = driver.find_elements(By.XPATH, "//button | //input[@type='button'] | //input[@type='submit']")
-        print(f"Found {len(buttons)} buttons on page")
+        # Find the pagination table using its ID
+        pagination_table = driver.find_element(By.ID, "productTable")
+        print("Found pagination table with ID: productTable")
         
-        # Try to interact with alert buttons if available
-        alert_buttons = driver.find_elements(By.XPATH, "//button[contains(text(), 'Alert') or contains(text(), 'Confirm') or contains(text(), 'Prompt')]")
-        for btn in alert_buttons[:3]:  # Limit to first 3 to avoid too many alerts
-            try:
-                btn.click()
-                time.sleep(1)
-                alert = driver.switch_to.alert
-                alert_text = alert.text
-                print(f"Alert text: {alert_text}")
-                alert.accept()
-                print("Alert accepted")
-            except:
-                print("No alert appeared or already handled")
-                
+        # First select checkboxes from the first page
+        checkboxes = pagination_table.find_elements(By.XPATH, ".//tbody//input[@type='checkbox']")
+        if checkboxes:
+            # Select the first item
+            if len(checkboxes) >= 1:
+                checkboxes[0].click()
+                print("Selected item #1 from pagination table")
+            
+            # Select the third item 
+            if len(checkboxes) >= 3:
+                checkboxes[2].click()
+                print("Selected item #3 from pagination table")
+        
+        time.sleep(1)
+        
+        # Find and click on page 2 button using the pagination element
+        pagination_element = driver.find_element(By.ID, "pagination")
+        page2_link = pagination_element.find_element(By.XPATH, ".//li/a[text()='2']")
+        click(driver, page2_link)
+        print("Pagination: Clicked on Page 2")
+        time.sleep(2)
+        
+        # Select items from page 2 (table remains the same but content changes)
+        page2_checkboxes = pagination_table.find_elements(By.XPATH, ".//tbody//input[@type='checkbox']")
+        if page2_checkboxes and len(page2_checkboxes) >= 1:
+            page2_checkboxes[0].click()
+            print("Selected first item from page 2")
+            
+        # Navigate to page 3
+        page3_link = pagination_element.find_element(By.XPATH, ".//li/a[text()='3']")
+        click(driver, page3_link)
+        print("Pagination: Clicked on Page 3")
+        time.sleep(2)
+        
+        # Select items from page 3
+        page3_checkboxes = pagination_table.find_elements(By.XPATH, ".//tbody//input[@type='checkbox']")
+        if page3_checkboxes and len(page3_checkboxes) >= 1:
+            page3_checkboxes[0].click()
+            print("Selected first item from page 3")
+
+        # navigate to page 4
+        page4_link = pagination_element.find_element(By.XPATH, ".//li/a[text()='4']")
+        click(driver, page4_link)
+        print("Pagination: Clicked on Page 4")
+        time.sleep(2)
+
+        # Select items from page 4
+        page4_checkboxes = pagination_table.find_elements(By.XPATH, ".//tbody//input[@type='checkbox']")
+        if page4_checkboxes and len(page4_checkboxes) >= 1:
+            page4_checkboxes[0].click()
+            print("Selected first item from page 4")
+
+        # Go back to page 1
+        page1_link = pagination_element.find_element(By.XPATH, ".//li/a[text()='1']")
+        click(driver, page1_link)
+        print("Pagination: Returned to Page 1")
+        time.sleep(2)
     except Exception as e:
-        print(f"Error during additional interactions: {e}")
+        print(f"Pagination test error: {e}")
+
+    # --- Simple Labels And Links Test ---
+    try:
+        print("\n=== LABELS AND LINKS LIST ===")
+        
+        # Find and scroll to the Labels And Links section
+        labels_section = driver.find_element(By.XPATH, "//h2[contains(text(), 'Labels And Links')]")
+        driver.execute_script("arguments[0].scrollIntoView(true);", labels_section)
+        print("Scrolled to Labels And Links section")
+        time.sleep(1)
+        
+        # Find the Labels and Links container
+        links_container = driver.find_element(By.XPATH, "//h2[contains(text(), 'Labels And Links')]/following::div[1]")
+        
+        # Get all links in the section
+        all_links = links_container.find_elements(By.TAG_NAME, "a")
+        print(f"Found {len(all_links)} links in the Labels And Links section")
+        
+        # Print all links
+        for i, link in enumerate(all_links):
+            link_text = link.text.strip()
+            link_href = link.get_attribute("href")
+            print(f"{i+1}. {link_text}: {link_href}")
+        
+        print("Labels And Links listing completed")
+        
+    except Exception as e:
+        print(f"Error listing Labels And Links: {e}")
+        
+    # --- Simple Form Filling ---
+    try:
+        print("\n=== FORM FILLING ===")
+        
+        # Find and scroll to Form section
+        form_section = driver.find_element(By.XPATH, "//h2[text()='Form']")
+        driver.execute_script("arguments[0].scrollIntoView(true);", form_section)
+        print("Scrolled to Form section")
+        time.sleep(1)
+        
+        # Fill and submit all three forms with simple approach
+        input_fields = driver.find_elements(By.XPATH, "//input[@type='text' and contains(@class, 'input-field')]")
+        submit_buttons = driver.find_elements(By.XPATH, "//button[contains(text(), 'Submit')]")
+        
+        # Fill each form in sequence
+        for i in range(min(len(input_fields), len(submit_buttons))):
+            # Fill the input field
+            input_fields[i].clear()
+            input_fields[i].send_keys(f"Test data {i+1}")
+            print(f"Entered text in form {i+1}")
+            
+            # Click submit button
+            submit_buttons[i].click()
+            print(f"Clicked submit for form {i+1}")
+            time.sleep(0.5)
+        
+        print("Form filling completed")
+        
+    except Exception as e:
+        print(f"Error in form filling: {e}")
+
+    # --- Footer Links Listing ---
+    try:
+        print("\n=== FOOTER LINKS LIST ===")
+        
+        # Find and scroll to the Footer Links section
+        footer_section = driver.find_element(By.XPATH, "//h2[contains(text(), 'Footer Links')]")
+        driver.execute_script("arguments[0].scrollIntoView(true);", footer_section)
+        print("Scrolled to Footer Links section")
+        time.sleep(1)
+        
+        # Find all footer links
+        footer_links = driver.find_elements(By.XPATH, "//h2[contains(text(), 'Footer Links')]/following::li/a")
+        print(f"Found {len(footer_links)} links in the Footer section")
+        
+        # Print all footer links
+        for i, link in enumerate(footer_links):
+            link_text = link.text.strip()
+            link_href = link.get_attribute("href")
+            print(f"{i+1}. {link_text}: {link_href}")
+            
+        print("Footer links listing completed")
+        
+    except Exception as e:
+        print(f"Error listing Footer links: {e}")
     
+    # --- Shadow DOM Content Listing ---
+    try:
+        print("\n=== SHADOW DOM CONTENT ===")
+        
+        
+        
+        # Find YouTube link with simple approach
+        try:
+            youtube_link = driver.find_element(By.XPATH, "//a[contains(@href, 'youtube')]")
+            if youtube_link:
+                print(f"\nYouTube Link: {youtube_link.get_attribute('href')}")
+            else:
+                print("\nNo YouTube link found")
+        except:
+            print("\nNo YouTube link found")
+            
+        print("Shadow DOM content listing completed")
+        
+    except Exception as e:
+        print(f"Error listing shadow DOM content: {e}")
+
     print(f"Completed test for {name}")
     print("-" * 50)
+# refresh the page for new entry from excel sheet
+    driver.refresh()
+    time.sleep(3)
 
 # Close browser
 driver.quit()
